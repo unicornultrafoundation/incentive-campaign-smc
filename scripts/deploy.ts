@@ -1,22 +1,21 @@
 import { ethers } from "hardhat";
+import hre from "hardhat";
 
 async function main() {
-  const currentTimestampInSeconds = Math.round(Date.now() / 1000);
-  const unlockTime = currentTimestampInSeconds + 60;
-
-  const lockedAmount = ethers.parseEther("0.001");
-
-  const lock = await ethers.deployContract("Lock", [unlockTime], {
-    value: lockedAmount,
-  });
-
-  await lock.waitForDeployment();
-
-  console.log(
-    `Lock with ${ethers.formatEther(
-      lockedAmount
-    )}ETH and unlock timestamp ${unlockTime} deployed to ${lock.target}`
-  );
+  const pUSDT = "0x8Fef26D79DA3Ac2AE5DaC2acfb5A802Fb043E6F0"
+  const startTime = 1730354400
+  const incentivePool = await ethers.deployContract("IncentivePool", [pUSDT, startTime]);
+  await incentivePool.waitForDeployment();
+  console.log(`IncentivePool deployed to ${incentivePool.target}`);
+  const incentivePoolContract = incentivePool.target
+  try {
+    await hre.run("verify:verify", {
+      address: incentivePoolContract,
+      constructorArguments: [pUSDT, startTime],
+    });
+  } catch (error) {
+    console.log('dailyQuest: ', error);
+  }
 }
 
 // We recommend this pattern to be able to use async/await everywhere

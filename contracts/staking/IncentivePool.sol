@@ -8,13 +8,24 @@ import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 
 import "../libs/TransferHelper.sol";
 
-contract PublicPool is Ownable, Pausable, ReentrancyGuard, AccessControl {
+contract IncentivePool is
+    Ownable,
+    Pausable,
+    ReentrancyGuard,
+    AccessControl,
+    EIP712
+{
+    using ECDSA for bytes32;
     using SafeMath for uint256;
     using EnumerableSet for EnumerableSet.AddressSet;
     using EnumerableSet for EnumerableSet.UintSet;
+
+    bytes32 public constant POOL_SIGNER = keccak256("POOL_SIGNER");
 
     struct UserInfo {
         uint256 totalStaked;
@@ -22,8 +33,8 @@ contract PublicPool is Ownable, Pausable, ReentrancyGuard, AccessControl {
         uint256 totalClaimed;
     }
 
-    uint256 public MAX_USDT_POOL_CAP = 3_000_000 * 1e18;
-    uint256 public MAX_U2U_REWARDS = 20_000_000 * 1e18;
+    uint256 public MAX_USDT_POOL_CAP = 1_500_000 * 1e6;
+    uint256 public MAX_U2U_REWARDS = 10_000_000 * 1e18;
     uint256 public MIN_STAKE_AMOUNT = 10 * 1e18;
     uint256 public MAX_STAKE_AMOUNT = 10000 * 1e18;
     uint256 public MAX_STAKING_DAYS = 90 days;
@@ -32,14 +43,23 @@ contract PublicPool is Ownable, Pausable, ReentrancyGuard, AccessControl {
     uint256 public startTime;
     uint256 public endTime;
 
+    bool public ignoreSigner;
+
     // mapping address => user info
     mapping(address => UserInfo) private users_;
+
+    mapping(bytes => bool) public usedSignatures;
 
     event Harvest(address indexed user, uint256 u2uRewards);
     event Stake(address indexed user, uint256 amount);
     event UnStake(address indexed user, uint256 amount);
 
-    constructor(address _pUSDT, uint256 _startTime) {
+    event UpdateIgnoreSignerState (bool newState);
+
+    constructor(
+        address _pUSDT,
+        uint256 _startTime
+    ) EIP712("IncentivePool", "1") {
         pUSDT = _pUSDT;
         startTime = _startTime;
         endTime = _startTime + MAX_STAKING_DAYS;
@@ -54,20 +74,11 @@ contract PublicPool is Ownable, Pausable, ReentrancyGuard, AccessControl {
         _;
     }
 
-    modifier onlyStarted {
-        require(
-            block.timestamp >= startTime && block.timestamp <= endTime,
-            "Pool is not started"
-        );
-        _;
-    }
-
-    modifier onlyEnded() {
-        require(block.timestamp > endTime, "Pool is not ended");
-        _;
-    }
-
     // =================== EXTERNAL FUNCTION =================== //
+    function setIgnoreSigner(bool _state) external onlyMasterAdmin {
+        ignoreSigner = _state;
+        emit UpdateIgnoreSignerState(_state);
+    }
 
     function rewardsRatePerSecond() external view returns (uint256) {
         return _rewardsRatePerSecond();
@@ -91,12 +102,24 @@ contract PublicPool is Ownable, Pausable, ReentrancyGuard, AccessControl {
         return _getUserInfo(_user);
     }
 
-    function unstake() external onlyEnded {
+    function unstake() external {
+        require(block.timestamp > endTime, "Pool is not ended");
         _unstake();
     }
 
-    function stake(uint256 _amount) external onlyStarted {
+    function stake(
+        uint256 _amount,
+        uint256 _expiresAt,
+        bytes memory _signature
+    ) external {
+        require(block.timestamp < endTime, "Pool is ended");
         require(_amount >= MIN_STAKE_AMOUNT, "not enough minimum stake amount");
+        if (!ignoreSigner) {
+            require(!usedSignatures[_signature], "Stake: signature reused");
+            usedSignatures[_signature] = true;
+            address _signer = _verifyStake(_expiresAt, _signature);
+            require(hasRole(POOL_SIGNER, _signer), "Stake: only signer");
+        }
         _stake(_amount);
     }
 
@@ -104,7 +127,32 @@ contract PublicPool is Ownable, Pausable, ReentrancyGuard, AccessControl {
         _harvest();
     }
 
+    function hashStake(
+        address _userAddr,
+        uint256 _expiresAt
+    ) public view returns (bytes32) {
+        return
+            _hashTypedDataV4(
+                keccak256(abi.encode(_userAddr, address(this), _expiresAt))
+            );
+    }
+
+    function verifyStake(
+        uint256 _expiresAt,
+        bytes memory _signature
+    ) public view returns (address) {
+        return _verifyStake(_expiresAt, _signature);
+    }
+
     // ============================= INTERNAL HANDLE ============================= //
+    function _verifyStake(
+        uint256 _expiresAt,
+        bytes memory _signature
+    ) private view returns (address) {
+        bytes32 digest = hashStake(msg.sender, _expiresAt);
+        return digest.toEthSignedMessageHash().recover(_signature);
+    }
+
     function _unstake() internal {
         unchecked {
             _harvest();
@@ -123,7 +171,10 @@ contract PublicPool is Ownable, Pausable, ReentrancyGuard, AccessControl {
             _harvest();
             address _user = msg.sender;
             users_[_user].totalStaked += _amount;
-            require(users_[_user].totalStaked <= MAX_STAKE_AMOUNT, "staked amount over");            
+            require(
+                users_[_user].totalStaked <= MAX_STAKE_AMOUNT,
+                "staked amount over"
+            );
             // Send USDT to staking pool
             TransferHelper.safeTransferFrom(
                 pUSDT,
