@@ -50,7 +50,7 @@ contract IncentivePool is
     event Stake(address indexed user, uint256 amount);
     event UnStake(address indexed user, uint256 amount);
 
-    event UpdateIgnoreSignerState (bool newState);
+    event UpdateIgnoreSignerState(bool newState);
 
     constructor(
         address _pUSDT,
@@ -187,8 +187,8 @@ contract IncentivePool is
         unchecked {
             address _user = msg.sender;
             uint256 _u2uRewards = _pendingRewards(_user);
+            users_[_user].latestHarvest = block.timestamp;
             if (_u2uRewards > 0) {
-                users_[_user].latestHarvest = block.timestamp;
                 users_[_user].totalClaimed += _u2uRewards;
                 // Handle send rewards
                 TransferHelper.safeTransferNative(_user, _u2uRewards);
@@ -246,5 +246,4 @@ contract IncentivePool is
     ) external onlyMasterAdmin {
         TransferHelper.safeTransferNative(_to, _amount);
     }
-
 }

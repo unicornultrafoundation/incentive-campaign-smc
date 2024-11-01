@@ -12,10 +12,14 @@ import "../libs/TransferHelper.sol";
 contract AirdropPool is Ownable, AccessControl, EIP712 {
     using ECDSA for bytes32;
     bytes32 public constant AIRDROP_ADMIN = keccak256("AIRDROP_ADMIN");
+    bytes32 public constant POOL_SIGNER = keccak256("POOL_SIGNER");
+
 
     uint256 public constant AIRDROP_AMOUNT = 5 * 1e18;
     // mapping user => claimed
     mapping(address => bool) public users;
+
+    mapping(bytes => bool) public usedSignatures;
 
     event SendAir(address indexed to);
 
@@ -31,15 +35,24 @@ contract AirdropPool is Ownable, AccessControl, EIP712 {
         _;
     }
 
-    function sendAir(address _to) external {
-        require(hasRole(AIRDROP_ADMIN, _msgSender()), "AIRDROP_ADMIN");
-        require(!users[_to], "Already sent");
+    function sendAir(
+        address _to,
+        uint256 _expiresAt,
+        bytes memory _signature
+    ) external {
+        require(!usedSignatures[_signature], "Air: signature reused");
+        usedSignatures[_signature] = true;
+        address _signer = _verify(_expiresAt, _signature);
+        require(hasRole(POOL_SIGNER, _signer), "Air: only signer");
+        require(_expiresAt >= block.timestamp, "Stake: signature expired");
+        require(hasRole(AIRDROP_ADMIN, _msgSender()), "Air: AIRDROP_ADMIN");
+        require(!users[_to], "Air: Already sent");
         TransferHelper.safeTransferNative(_to, AIRDROP_AMOUNT);
         users[_to] = true;
         emit SendAir(_to);
     }
 
-    function hash(
+    function hashMsg(
         address _userAddr,
         uint256 _expiresAt
     ) public view returns (bytes32) {
@@ -60,7 +73,7 @@ contract AirdropPool is Ownable, AccessControl, EIP712 {
         uint256 _expiresAt,
         bytes memory _signature
     ) private view returns (address) {
-        bytes32 digest = hash(msg.sender, _expiresAt);
+        bytes32 digest = hashMsg(msg.sender, _expiresAt);
         return digest.toEthSignedMessageHash().recover(_signature);
     }
 

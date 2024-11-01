@@ -43,3 +43,6 @@ main().catch((error) => {
   console.error(error);
   process.exitCode = 1;
 });
+
+// Public pool deployed to 0xc444aFA8C8007B7594C54B40AEA51Ada5589725C
+// Bitget pool deployed to 0x286AD6DA882A4600a0Ed92d20ce1541a8Dc5c34b
