@@ -7,10 +7,8 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
-import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
-
 import "../libs/TransferHelper.sol";
 
 contract IncentivePool is
@@ -22,8 +20,6 @@ contract IncentivePool is
 {
     using ECDSA for bytes32;
     using SafeMath for uint256;
-    using EnumerableSet for EnumerableSet.AddressSet;
-    using EnumerableSet for EnumerableSet.UintSet;
 
     bytes32 public constant POOL_SIGNER = keccak256("POOL_SIGNER");
 
@@ -35,8 +31,8 @@ contract IncentivePool is
 
     uint256 public MAX_USDT_POOL_CAP = 1_500_000 * 1e6;
     uint256 public MAX_U2U_REWARDS = 10_000_000 * 1e18;
-    uint256 public MIN_STAKE_AMOUNT = 10 * 1e18;
-    uint256 public MAX_STAKE_AMOUNT = 10000 * 1e18;
+    uint256 public MIN_STAKE_AMOUNT = 10 * 1e6;
+    uint256 public MAX_STAKE_AMOUNT = 10000 * 1e6;
     uint256 public MAX_STAKING_DAYS = 90 days;
 
     address public pUSDT;
@@ -102,7 +98,7 @@ contract IncentivePool is
         return _getUserInfo(_user);
     }
 
-    function unstake() external {
+    function unstake() external whenNotPaused nonReentrant {
         require(block.timestamp > endTime, "Pool is not ended");
         _unstake();
     }
@@ -111,7 +107,7 @@ contract IncentivePool is
         uint256 _amount,
         uint256 _expiresAt,
         bytes memory _signature
-    ) external {
+    ) external whenNotPaused nonReentrant {
         require(block.timestamp < endTime, "Pool is ended");
         require(_amount >= MIN_STAKE_AMOUNT, "not enough minimum stake amount");
         if (!ignoreSigner) {
@@ -119,11 +115,12 @@ contract IncentivePool is
             usedSignatures[_signature] = true;
             address _signer = _verifyStake(_expiresAt, _signature);
             require(hasRole(POOL_SIGNER, _signer), "Stake: only signer");
+            require(_expiresAt >= block.timestamp, "Stake: signature expired");
         }
         _stake(_amount);
     }
 
-    function harvest() external {
+    function harvest() external whenNotPaused nonReentrant {
         _harvest();
     }
 
@@ -250,11 +247,4 @@ contract IncentivePool is
         TransferHelper.safeTransferNative(_to, _amount);
     }
 
-    function emergencyWithdrawToken(
-        address _token,
-        address _to,
-        uint256 _amount
-    ) external onlyMasterAdmin {
-        TransferHelper.safeTransfer(_token, _to, _amount);
-    }
 }

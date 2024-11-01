@@ -8,6 +8,7 @@
     "compile": "npx hardhat compile",
     "test": "npx hardhat test",
     "deploy": "npx hardhat run scripts/deploy.ts --network nebulas",
+    "deploy-air": "npx hardhat run scripts/air.ts --network nebulas",
     "size": "npx hardhat size-contracts"
   },
   "devDependencies": {

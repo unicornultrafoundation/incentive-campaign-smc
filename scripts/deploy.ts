@@ -2,19 +2,38 @@ import { ethers } from "hardhat";
 import hre from "hardhat";
 
 async function main() {
+  let tx;
   const pUSDT = "0x8Fef26D79DA3Ac2AE5DaC2acfb5A802Fb043E6F0"
+  const signer_role = "0xece0090efe769fae380dcd2ae676ddd28ca1b22e739a0f915e9d654a2214334d"
+  const admin_address = "0x556180984Ec8B4d28476376f99A071042f262a5c"
   const startTime = 1730354400
-  const incentivePool = await ethers.deployContract("IncentivePool", [pUSDT, startTime]);
-  await incentivePool.waitForDeployment();
-  console.log(`IncentivePool deployed to ${incentivePool.target}`);
-  const incentivePoolContract = incentivePool.target
+  const publicPool = await ethers.deployContract("IncentivePool", [pUSDT, startTime]);
+  await publicPool.waitForDeployment();
+  console.log(`Public pool deployed to ${publicPool.target}`);
+  const publicPoolContract = publicPool.target
+  tx = await publicPool.grantRole(signer_role, admin_address)
+
+  const bigetPool = await ethers.deployContract("IncentivePool", [pUSDT, startTime]);
+  await bigetPool.waitForDeployment();
+  console.log(`Bitget pool deployed to ${bigetPool.target}`);
+  const bigetPoolContract = bigetPool.target
+  tx = await bigetPool.grantRole(signer_role, admin_address)
+
   try {
     await hre.run("verify:verify", {
-      address: incentivePoolContract,
+      address: publicPoolContract,
       constructorArguments: [pUSDT, startTime],
     });
   } catch (error) {
-    console.log('dailyQuest: ', error);
+    console.log('publicPoolContract: ', error);
+  }
+  try {
+    await hre.run("verify:verify", {
+      address: bigetPoolContract,
+      constructorArguments: [pUSDT, startTime],
+    });
+  } catch (error) {
+    console.log('bigetPoolContract: ', error);
   }
 }
 
