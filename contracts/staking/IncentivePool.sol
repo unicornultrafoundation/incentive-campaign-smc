@@ -35,9 +35,12 @@ contract IncentivePool is
     uint256 public MAX_STAKE_AMOUNT = 10000 * 1e6;
     uint256 public MAX_STAKING_DAYS = 90 days;
 
+
     address public pUSDT;
     uint256 public startTime;
     uint256 public endTime;
+
+    uint256 public totalStaked;
 
     bool public ignoreSigner;
 
@@ -156,6 +159,7 @@ contract IncentivePool is
             address _user = msg.sender;
             uint256 _staked = users_[_user].totalStaked;
             if (_staked > 0) {
+                totalStaked -= _staked;
                 TransferHelper.safeTransfer(pUSDT, _user, _staked);
                 users_[_user].totalStaked = 0;
                 emit UnStake(_user, _staked);
@@ -172,6 +176,9 @@ contract IncentivePool is
                 users_[_user].totalStaked <= MAX_STAKE_AMOUNT,
                 "staked amount over"
             );
+            totalStaked += _amount;
+            require(totalStaked <= MAX_USDT_POOL_CAP, "maximum pool cap");
+
             // Send USDT to staking pool
             TransferHelper.safeTransferFrom(
                 pUSDT,
