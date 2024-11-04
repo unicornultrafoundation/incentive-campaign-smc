@@ -225,6 +225,10 @@ contract IncentivePool is
             (uint256 totalStaked, uint256 latestHarvest, ) = _getUserInfo(
                 _user
             );
+            if (block.timestamp < startTime) return 0;
+            if (latestHarvest < startTime) {
+                latestHarvest = startTime;
+            }
             if (totalStaked == 0) return 0;
             uint256 timeRewards = block.timestamp - latestHarvest;
             return timeRewards.mul(totalStaked).mul(_rewardsRatePerSecond());
