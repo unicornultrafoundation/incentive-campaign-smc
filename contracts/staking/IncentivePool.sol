@@ -39,7 +39,7 @@ contract IncentivePool is
     address public pUSDT;
     uint256 public startTime;
     uint256 public endTime;
-
+    uint256 public claimableTime;
     uint256 public totalStaked;
 
     bool public ignoreSigner;
@@ -54,6 +54,7 @@ contract IncentivePool is
     event UnStake(address indexed user, uint256 amount);
 
     event UpdateIgnoreSignerState(bool newState);
+    event UpdateClaimableTime(uint256 time);
 
     constructor(
         address _pUSDT,
@@ -73,7 +74,18 @@ contract IncentivePool is
         _;
     }
 
+    modifier onlyClaimableTime {
+        require(claimableTime > 0 && block.timestamp >= claimableTime, "Harvest: unclaimable time");
+        _;
+    }
+
     // =================== EXTERNAL FUNCTION =================== //
+    function setClaimableTime (uint256 _time) external onlyMasterAdmin {
+        require(_time >= block.timestamp, "invalid time");
+        claimableTime = _time;
+        emit UpdateClaimableTime(_time);
+    }
+
     function setIgnoreSigner(bool _state) external onlyMasterAdmin {
         ignoreSigner = _state;
         emit UpdateIgnoreSignerState(_state);
@@ -123,7 +135,7 @@ contract IncentivePool is
         _stake(_amount);
     }
 
-    function harvest() external whenNotPaused nonReentrant {
+    function harvest() external whenNotPaused nonReentrant onlyClaimableTime {
         _harvest();
     }
 
