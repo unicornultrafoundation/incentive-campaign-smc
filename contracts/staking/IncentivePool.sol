@@ -40,7 +40,7 @@ contract IncentivePool is
     uint256 public startTime;
     uint256 public endTime;
     uint256 public claimableTime;
-    uint256 public totalStaked;
+    uint256 public totalPoolStaked;
 
     bool public ignoreSigner;
 
@@ -81,7 +81,7 @@ contract IncentivePool is
 
     // =================== EXTERNAL FUNCTION =================== //
     function setClaimableTime (uint256 _time) external onlyMasterAdmin {
-        require(_time >= block.timestamp, "invalid time");
+        require(_time >= block.timestamp, "invalid claimable time");
         claimableTime = _time;
         emit UpdateClaimableTime(_time);
     }
@@ -171,7 +171,7 @@ contract IncentivePool is
             address _user = msg.sender;
             uint256 _staked = users_[_user].totalStaked;
             if (_staked > 0) {
-                totalStaked -= _staked;
+                totalPoolStaked -= _staked;
                 TransferHelper.safeTransfer(pUSDT, _user, _staked);
                 users_[_user].totalStaked = 0;
                 emit UnStake(_user, _staked);
@@ -188,8 +188,8 @@ contract IncentivePool is
                 users_[_user].totalStaked <= MAX_STAKE_AMOUNT,
                 "staked amount over"
             );
-            totalStaked += _amount;
-            require(totalStaked <= MAX_USDT_POOL_CAP, "maximum pool cap");
+            totalPoolStaked += _amount;
+            require(totalPoolStaked <= MAX_USDT_POOL_CAP, "maximum pool cap");
 
             // Send USDT to staking pool
             TransferHelper.safeTransferFrom(
