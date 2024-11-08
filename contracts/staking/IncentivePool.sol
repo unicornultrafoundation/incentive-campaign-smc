@@ -35,7 +35,6 @@ contract IncentivePool is
     uint256 public MAX_STAKE_AMOUNT = 10000 * 1e6;
     uint256 public MAX_STAKING_DAYS = 90 days;
 
-
     address public pUSDT;
     uint256 public startTime;
     uint256 public endTime;
@@ -74,13 +73,16 @@ contract IncentivePool is
         _;
     }
 
-    modifier onlyClaimableTime {
-        require(claimableTime > 0 && block.timestamp >= claimableTime, "Harvest: unclaimable time");
+    modifier onlyClaimableTime() {
+        require(
+            claimableTime > 0 && block.timestamp >= claimableTime,
+            "Harvest: unclaimable time"
+        );
         _;
     }
 
     // =================== EXTERNAL FUNCTION =================== //
-    function setClaimableTime (uint256 _time) external onlyMasterAdmin {
+    function setClaimableTime(uint256 _time) external onlyMasterAdmin {
         require(_time >= block.timestamp, "invalid claimable time");
         claimableTime = _time;
         emit UpdateClaimableTime(_time);
@@ -166,53 +168,43 @@ contract IncentivePool is
     }
 
     function _unstake() internal {
-        unchecked {
-            _harvest();
-            address _user = msg.sender;
-            uint256 _staked = users_[_user].totalStaked;
-            if (_staked > 0) {
-                totalPoolStaked -= _staked;
-                TransferHelper.safeTransfer(pUSDT, _user, _staked);
-                users_[_user].totalStaked = 0;
-                emit UnStake(_user, _staked);
-            }
+        _harvest();
+        address _user = msg.sender;
+        uint256 _staked = users_[_user].totalStaked;
+        if (_staked > 0) {
+            totalPoolStaked -= _staked;
+            TransferHelper.safeTransfer(pUSDT, _user, _staked);
+            users_[_user].totalStaked = 0;
+            emit UnStake(_user, _staked);
         }
     }
 
     function _stake(uint256 _amount) internal {
-        unchecked {
-            _harvest();
-            address _user = msg.sender;
-            users_[_user].totalStaked += _amount;
-            require(
-                users_[_user].totalStaked <= MAX_STAKE_AMOUNT,
-                "staked amount over"
-            );
-            totalPoolStaked += _amount;
-            require(totalPoolStaked <= MAX_USDT_POOL_CAP, "maximum pool cap");
+        _harvest();
+        address _user = msg.sender;
+        users_[_user].totalStaked += _amount;
+        require(
+            users_[_user].totalStaked <= MAX_STAKE_AMOUNT,
+            "staked amount over"
+        );
+        totalPoolStaked += _amount;
+        require(totalPoolStaked <= MAX_USDT_POOL_CAP, "maximum pool cap");
 
-            // Send USDT to staking pool
-            TransferHelper.safeTransferFrom(
-                pUSDT,
-                _user,
-                address(this),
-                _amount
-            );
-            emit Stake(_user, _amount);
-        }
+        // Send USDT to staking pool
+        TransferHelper.safeTransferFrom(pUSDT, _user, address(this), _amount);
+        emit Stake(_user, _amount);
     }
 
     function _harvest() internal {
-        unchecked {
-            address _user = msg.sender;
-            uint256 _u2uRewards = _pendingRewards(_user);
-            users_[_user].latestHarvest = block.timestamp;
-            if (_u2uRewards > 0) {
-                users_[_user].totalClaimed += _u2uRewards;
-                // Handle send rewards
-                TransferHelper.safeTransferNative(_user, _u2uRewards);
-                emit Harvest(_user, _u2uRewards);
-            }
+        address _user = msg.sender;
+        uint256 _u2uRewards = _pendingRewards(_user);
+        users_[_user].latestHarvest = block.timestamp;
+        if (_u2uRewards > 0) {
+            require(address(this).balance >= _u2uRewards, "Pool rewards insufficient");
+            users_[_user].totalClaimed += _u2uRewards;
+            // Handle send rewards
+            TransferHelper.safeTransferNative(_user, _u2uRewards);
+            emit Harvest(_user, _u2uRewards);
         }
     }
 
@@ -233,18 +225,18 @@ contract IncentivePool is
     }
 
     function _pendingRewards(address _user) internal view returns (uint256) {
-        unchecked {
-            (uint256 totalStaked, uint256 latestHarvest, ) = _getUserInfo(
-                _user
-            );
-            if (block.timestamp < startTime) return 0;
-            if (latestHarvest < startTime) {
-                latestHarvest = startTime;
-            }
-            if (totalStaked == 0) return 0;
-            uint256 timeRewards = block.timestamp - latestHarvest;
-            return timeRewards.mul(totalStaked).mul(_rewardsRatePerSecond());
+        (uint256 totalStaked, uint256 latestHarvest, ) = _getUserInfo(_user);
+        if (block.timestamp < startTime) return 0;
+        if (latestHarvest < startTime) {
+            latestHarvest = startTime;
         }
+        if (totalStaked == 0) return 0;
+        uint256 checkPointTime = block.timestamp;
+        if (checkPointTime > endTime) {
+            checkPointTime = endTime;
+        }
+        uint256 timeRewards = checkPointTime - latestHarvest;
+        return timeRewards.mul(totalStaked).mul(_rewardsRatePerSecond());
     }
 
     function _rewardsRatePerSecond() internal view returns (uint256) {
