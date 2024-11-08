@@ -27,6 +27,7 @@ contract IncentivePool is
         uint256 totalStaked;
         uint256 latestHarvest;
         uint256 totalClaimed;
+        uint256 debt;
     }
 
     uint256 public MAX_USDT_POOL_CAP = 1_500_000 * 1e6;
@@ -109,7 +110,8 @@ contract IncentivePool is
         returns (
             uint256 totalStaked,
             uint256 latestHarvest,
-            uint256 totalClaimed
+            uint256 totalClaimed,
+            uint256 debt
         )
     {
         return _getUserInfo(_user);
@@ -180,7 +182,7 @@ contract IncentivePool is
     }
 
     function _stake(uint256 _amount) internal {
-        _harvest();
+        _updateDebt();
         address _user = msg.sender;
         users_[_user].totalStaked += _amount;
         require(
@@ -195,6 +197,15 @@ contract IncentivePool is
         emit Stake(_user, _amount);
     }
 
+    function _updateDebt () internal {
+        address _user = msg.sender;
+        uint256 _debtAmount = _pendingRewardsNoDebt(_user);
+        users_[_user].latestHarvest = block.timestamp;
+        if (_debtAmount > 0) {
+            users_[_user].debt += _debtAmount;
+        }
+    }
+
     function _harvest() internal {
         address _user = msg.sender;
         uint256 _u2uRewards = _pendingRewards(_user);
@@ -202,6 +213,7 @@ contract IncentivePool is
         if (_u2uRewards > 0) {
             require(address(this).balance >= _u2uRewards, "Pool rewards insufficient");
             users_[_user].totalClaimed += _u2uRewards;
+            users_[_user].debt = 0;
             // Handle send rewards
             TransferHelper.safeTransferNative(_user, _u2uRewards);
             emit Harvest(_user, _u2uRewards);
@@ -216,16 +228,22 @@ contract IncentivePool is
         returns (
             uint256 totalStaked,
             uint256 latestHarvest,
-            uint256 totalClaimed
+            uint256 totalClaimed,
+            uint256 debt
         )
     {
         totalStaked = users_[_user].totalStaked;
         latestHarvest = users_[_user].latestHarvest;
         totalClaimed = users_[_user].totalClaimed;
+        debt = users_[_user].debt;
     }
 
     function _pendingRewards(address _user) internal view returns (uint256) {
-        (uint256 totalStaked, uint256 latestHarvest, ) = _getUserInfo(_user);
+        return _pendingRewardsNoDebt(_user) + users_[_user].debt;
+    }
+
+    function _pendingRewardsNoDebt(address _user) internal view returns (uint256) {
+        (uint256 totalStaked, uint256 latestHarvest, ,) = _getUserInfo(_user);
         if (block.timestamp < startTime) return 0;
         if (latestHarvest < startTime) {
             latestHarvest = startTime;
