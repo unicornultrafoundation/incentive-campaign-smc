@@ -30,15 +30,15 @@ contract IncentivePool is
         uint256 debt;
     }
 
-    uint256 public MAX_USDT_POOL_CAP = 1_500_000 * 1e6;
-    uint256 public MAX_U2U_REWARDS = 10_000_000 * 1e18;
-    uint256 public MIN_STAKE_AMOUNT = 10 * 1e6;
-    uint256 public MAX_STAKE_AMOUNT = 10000 * 1e6;
-    uint256 public MAX_STAKING_DAYS = 90 days;
+    uint256 public constant MAX_USDT_POOL_CAP = 1_500_000 * 1e6;
+    uint256 public constant MAX_U2U_REWARDS = 10_000_000 * 1e18;
+    uint256 public constant MIN_STAKE_AMOUNT = 10 * 1e6;
+    uint256 public constant MAX_STAKE_AMOUNT = 10000 * 1e6;
+    uint256 public constant MAX_STAKING_DAYS = 90 days;
 
-    address public pUSDT;
-    uint256 public startTime;
-    uint256 public endTime;
+    address public immutable pUSDT;
+    uint256 public immutable startTime;
+    uint256 public immutable endTime;
     uint256 public claimableTime;
     uint256 public totalPoolStaked;
 
@@ -58,10 +58,15 @@ contract IncentivePool is
 
     constructor(
         address _pUSDT,
-        uint256 _startTime
+        uint256 _startTime,
+        uint256 _claimableTime
     ) EIP712("IncentivePool", "1") {
+        require(_startTime >= block.timestamp, "start time invalid");
+        require(_claimableTime >= _startTime, "claimable time invalid");
+        require(_pUSDT != address(0), "pusdt address invalid");
         pUSDT = _pUSDT;
         startTime = _startTime;
+        claimableTime = _claimableTime;
         endTime = _startTime + MAX_STAKING_DAYS;
         _setupRole(DEFAULT_ADMIN_ROLE, msg.sender);
     }
@@ -85,11 +90,13 @@ contract IncentivePool is
     // =================== EXTERNAL FUNCTION =================== //
     function setClaimableTime(uint256 _time) external onlyMasterAdmin {
         require(_time >= block.timestamp, "invalid claimable time");
+        require(_time == claimableTime, "same current time");
         claimableTime = _time;
         emit UpdateClaimableTime(_time);
     }
 
     function setIgnoreSigner(bool _state) external onlyMasterAdmin {
+        require(_state != ignoreSigner, "same current state");
         ignoreSigner = _state;
         emit UpdateIgnoreSignerState(_state);
     }
@@ -156,7 +163,7 @@ contract IncentivePool is
     function verifyStake(
         uint256 _expiresAt,
         bytes memory _signature
-    ) public view returns (address) {
+    ) external view returns (address) {
         return _verifyStake(_expiresAt, _signature);
     }
 
@@ -170,7 +177,7 @@ contract IncentivePool is
     }
 
     function _unstake() internal {
-        _harvest();
+        _updateDebt();
         address _user = msg.sender;
         uint256 _staked = users_[_user].totalStaked;
         if (_staked > 0) {
@@ -232,10 +239,11 @@ contract IncentivePool is
             uint256 debt
         )
     {
-        totalStaked = users_[_user].totalStaked;
-        latestHarvest = users_[_user].latestHarvest;
-        totalClaimed = users_[_user].totalClaimed;
-        debt = users_[_user].debt;
+        UserInfo memory _userInfo = users_[_user];
+        totalStaked = _userInfo.totalStaked;
+        latestHarvest = _userInfo.latestHarvest;
+        totalClaimed = _userInfo.totalClaimed;
+        debt = _userInfo.debt;
     }
 
     function _pendingRewards(address _user) internal view returns (uint256) {
@@ -248,12 +256,15 @@ contract IncentivePool is
         if (latestHarvest < startTime) {
             latestHarvest = startTime;
         }
-        if (totalStaked == 0) return 0;
-        uint256 checkPointTime = block.timestamp;
-        if (checkPointTime > endTime) {
-            checkPointTime = endTime;
+        if (latestHarvest > endTime) {
+            latestHarvest = endTime;
         }
+        if (0 == totalStaked) return 0;
+        uint256 checkPointTime = block.timestamp < endTime ? block.timestamp : endTime;
         uint256 timeRewards = checkPointTime - latestHarvest;
+        if (timeRewards == 0) {
+            return 0;
+        }
         return timeRewards.mul(totalStaked).mul(_rewardsRatePerSecond());
     }
 
