@@ -42,6 +42,8 @@ contract IncentivePool is
     uint256 public claimableTime;
     uint256 public totalPoolStaked;
 
+    uint256 public totalAmountOwedToUsers;
+
     bool public ignoreSigner;
 
     // mapping address => user info
@@ -201,10 +203,23 @@ contract IncentivePool is
 
         // Send USDT to staking pool
         TransferHelper.safeTransferFrom(pUSDT, _user, address(this), _amount);
+        uint256 _rewards = _estimateRewards(_amount);
+        totalAmountOwedToUsers += _rewards;
         emit Stake(_user, _amount);
     }
 
-    function _updateDebt () internal {
+    function _estimateRewards(uint256 _amount) internal view returns (uint256) {
+        uint256 _startAt = block.timestamp < startTime
+            ? startTime
+            : block.timestamp;
+        uint256 timeRewards = endTime - _startAt;
+        if (timeRewards == 0) {
+            return 0;
+        }
+        return timeRewards.mul(_amount).mul(_rewardsRatePerSecond());
+    }
+
+    function _updateDebt() internal {
         address _user = msg.sender;
         uint256 _debtAmount = _pendingRewardsNoDebt(_user);
         users_[_user].latestHarvest = block.timestamp;
@@ -218,11 +233,15 @@ contract IncentivePool is
         uint256 _u2uRewards = _pendingRewards(_user);
         users_[_user].latestHarvest = block.timestamp;
         if (_u2uRewards > 0) {
-            require(address(this).balance >= _u2uRewards, "Pool rewards insufficient");
+            require(
+                address(this).balance >= _u2uRewards,
+                "Pool rewards insufficient"
+            );
             users_[_user].totalClaimed += _u2uRewards;
             users_[_user].debt = 0;
             // Handle send rewards
             TransferHelper.safeTransferNative(_user, _u2uRewards);
+            totalAmountOwedToUsers = totalAmountOwedToUsers > _u2uRewards ? totalAmountOwedToUsers.sub(_u2uRewards) : 0;
             emit Harvest(_user, _u2uRewards);
         }
     }
@@ -250,8 +269,10 @@ contract IncentivePool is
         return _pendingRewardsNoDebt(_user) + users_[_user].debt;
     }
 
-    function _pendingRewardsNoDebt(address _user) internal view returns (uint256) {
-        (uint256 totalStaked, uint256 latestHarvest, ,) = _getUserInfo(_user);
+    function _pendingRewardsNoDebt(
+        address _user
+    ) internal view returns (uint256) {
+        (uint256 totalStaked, uint256 latestHarvest, , ) = _getUserInfo(_user);
         if (block.timestamp < startTime) return 0;
         if (latestHarvest < startTime) {
             latestHarvest = startTime;
@@ -260,7 +281,9 @@ contract IncentivePool is
             latestHarvest = endTime;
         }
         if (0 == totalStaked) return 0;
-        uint256 checkPointTime = block.timestamp < endTime ? block.timestamp : endTime;
+        uint256 checkPointTime = block.timestamp < endTime
+            ? block.timestamp
+            : endTime;
         uint256 timeRewards = checkPointTime - latestHarvest;
         if (timeRewards == 0) {
             return 0;
@@ -268,10 +291,8 @@ contract IncentivePool is
         return timeRewards.mul(totalStaked).mul(_rewardsRatePerSecond());
     }
 
-    function _rewardsRatePerSecond() internal view returns (uint256) {
-        unchecked {
-            return MAX_U2U_REWARDS.div(MAX_USDT_POOL_CAP).div(MAX_STAKING_DAYS);
-        }
+    function _rewardsRatePerSecond() internal pure returns (uint256) {
+        return MAX_U2U_REWARDS.div(MAX_USDT_POOL_CAP).div(MAX_STAKING_DAYS);
     }
 
     function pause() external onlyMasterAdmin whenNotPaused {
@@ -288,6 +309,10 @@ contract IncentivePool is
         address _to,
         uint256 _amount
     ) external onlyMasterAdmin {
+        require(
+            _amount <= address(this).balance - totalAmountOwedToUsers,
+            "invalid amount"
+        );
         TransferHelper.safeTransferNative(_to, _amount);
     }
 }
