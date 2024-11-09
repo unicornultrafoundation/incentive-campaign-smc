@@ -92,7 +92,7 @@ contract IncentivePool is
     // =================== EXTERNAL FUNCTION =================== //
     function setClaimableTime(uint256 _time) external onlyMasterAdmin {
         require(_time >= block.timestamp, "invalid claimable time");
-        require(_time == claimableTime, "same current time");
+        require(_time != claimableTime, "same current time");
         claimableTime = _time;
         emit UpdateClaimableTime(_time);
     }
