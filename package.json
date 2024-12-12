@@ -6,9 +6,12 @@
   "main": "index.js",
   "scripts": {
     "compile": "npx hardhat compile",
-    "test": "npx hardhat test",
+    "test": "npx hardhat test test/IncentivePool.Test.ts",
     "deploy": "npx hardhat run scripts/deploy.ts --network nebulas",
     "deploy-air": "npx hardhat run scripts/air.ts --network nebulas",
+    "deploy-bitget": "npx hardhat run scripts/bitget-mainnet.ts --network solaris",
+    "deploy-air-mainnet": "npx hardhat run scripts/air-mainnet.ts --network solaris",
+    "deploy-public": "npx hardhat run scripts/public-mainnet.ts --network solaris",
     "size": "npx hardhat size-contracts"
   },
   "devDependencies": {

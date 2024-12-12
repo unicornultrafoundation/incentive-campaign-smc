@@ -2,38 +2,44 @@ import { ethers } from "hardhat";
 import hre from "hardhat";
 
 async function main() {
-  let tx;
-  const pUSDT = "0x8Fef26D79DA3Ac2AE5DaC2acfb5A802Fb043E6F0"
-  const signer_role = "0xece0090efe769fae380dcd2ae676ddd28ca1b22e739a0f915e9d654a2214334d"
-  const admin_address = "0x556180984Ec8B4d28476376f99A071042f262a5c"
-  const startTime = 1730354400
-  const publicPool = await ethers.deployContract("IncentivePool", [pUSDT, startTime]);
-  await publicPool.waitForDeployment();
-  console.log(`Public pool deployed to ${publicPool.target}`);
-  const publicPoolContract = publicPool.target
-  tx = await publicPool.grantRole(signer_role, admin_address)
 
-  const bigetPool = await ethers.deployContract("IncentivePool", [pUSDT, startTime]);
-  await bigetPool.waitForDeployment();
-  console.log(`Bitget pool deployed to ${bigetPool.target}`);
-  const bigetPoolContract = bigetPool.target
-  tx = await bigetPool.grantRole(signer_role, admin_address)
+  const mockUsdt = await ethers.deployContract("MockERC20", []);
+  await mockUsdt.waitForDeployment();
+  console.log(`Mock usdt deployed to ${mockUsdt.target}`);
+
+  let tx;
+  const pUSDT = mockUsdt.target
+  const admin_address = "0x556180984Ec8B4d28476376f99A071042f262a5c"
+  const pool1_address = "0x9aEfB3a61787d30f33B4049382647e1D85Eb50EB"
+
+  const publicPool2 = await ethers.deployContract("IncentivePoolV2", [pUSDT, pool1_address]);
+  await publicPool2.waitForDeployment();
+  console.log(`Public pool 2 deployed to ${publicPool2.target}`);
+  const publicPoolContract = publicPool2.target
+
+  const SIGNER_ROLE = await  publicPool2.POOL_SIGNER()
+
+  tx = await publicPool2.grantRole(SIGNER_ROLE, admin_address)
+
+  const pusdtAt = await ethers.getContractAt("MockERC20", pUSDT);
+  tx = await pusdtAt.approve(publicPoolContract, "1000000000000")
 
   try {
     await hre.run("verify:verify", {
       address: publicPoolContract,
-      constructorArguments: [pUSDT, startTime],
+      constructorArguments: [pUSDT, pool1_address],
     });
   } catch (error) {
-    console.log('publicPoolContract: ', error);
+    console.log('publicPool2: ', error);
   }
+
   try {
     await hre.run("verify:verify", {
-      address: bigetPoolContract,
-      constructorArguments: [pUSDT, startTime],
+      address: pUSDT,
+      constructorArguments: [],
     });
   } catch (error) {
-    console.log('bigetPoolContract: ', error);
+    console.log('pUSDT: ', error);
   }
 }
 
@@ -44,5 +50,8 @@ main().catch((error) => {
   process.exitCode = 1;
 });
 
-// Public pool deployed to 0xc444aFA8C8007B7594C54B40AEA51Ada5589725C
-// Bitget pool deployed to 0x286AD6DA882A4600a0Ed92d20ce1541a8Dc5c34b
+
+// npx hardhat verify --network nebulas 0x965aD51893144E91086c0c3EcbEB7066dA451320 0xBBF92F72a4627CEc4517aAcD817144014a8f64D8 0x9aEfB3a61787d30f33B4049382647e1D85Eb50EB
+
+// Mock usdt deployed to 0xBBF92F72a4627CEc4517aAcD817144014a8f64D8
+// Public pool 2 deployed to 0x965aD51893144E91086c0c3EcbEB7066dA451320
