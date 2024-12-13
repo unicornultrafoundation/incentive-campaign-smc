@@ -3,37 +3,28 @@ import hre from "hardhat";
 
 async function main() {
   let tx;
-  const pUSDT = "0x8Fef26D79DA3Ac2AE5DaC2acfb5A802Fb043E6F0"
-  const signer_role = "0xece0090efe769fae380dcd2ae676ddd28ca1b22e739a0f915e9d654a2214334d"
+  const pUSDT = "0xBBF92F72a4627CEc4517aAcD817144014a8f64D8"
+  
   const admin_address = "0x556180984Ec8B4d28476376f99A071042f262a5c"
-  const startTime = 1730354400
-  const publicPool = await ethers.deployContract("IncentivePool", [pUSDT, startTime]);
-  await publicPool.waitForDeployment();
-  console.log(`Public pool deployed to ${publicPool.target}`);
-  const publicPoolContract = publicPool.target
-  tx = await publicPool.grantRole(signer_role, admin_address)
 
-  const bigetPool = await ethers.deployContract("IncentivePool", [pUSDT, startTime]);
-  await bigetPool.waitForDeployment();
-  console.log(`Bitget pool deployed to ${bigetPool.target}`);
-  const bigetPoolContract = bigetPool.target
-  tx = await bigetPool.grantRole(signer_role, admin_address)
+  const publicPoolV1 = "0x9aEfB3a61787d30f33B4049382647e1D85Eb50EB"
+  
+  const publicPoolv2 = await ethers.deployContract("IncentivePoolV2", [pUSDT, publicPoolV1]);
+  await publicPoolv2.waitForDeployment();
+  console.log(`Public pool deployed to ${publicPoolv2.target}`);
+  const publicPoolv2PoolContract = publicPoolv2.target
 
+  const POOL_SIGNER = await publicPoolv2.POOL_SIGNER()
+  tx = await publicPoolv2.grantRole(POOL_SIGNER, admin_address)
+
+ 
   try {
     await hre.run("verify:verify", {
-      address: publicPoolContract,
-      constructorArguments: [pUSDT, startTime],
+      address: publicPoolv2PoolContract,
+      constructorArguments: [pUSDT, publicPoolV1],
     });
   } catch (error) {
     console.log('publicPoolContract: ', error);
-  }
-  try {
-    await hre.run("verify:verify", {
-      address: bigetPoolContract,
-      constructorArguments: [pUSDT, startTime],
-    });
-  } catch (error) {
-    console.log('bigetPoolContract: ', error);
   }
 }
 
