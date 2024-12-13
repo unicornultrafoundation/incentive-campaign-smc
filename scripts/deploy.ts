@@ -2,6 +2,11 @@ import { ethers } from "hardhat";
 import hre from "hardhat";
 
 async function main() {
+
+  const mockUsdt = await ethers.deployContract("MockERC20", []);
+  await mockUsdt.waitForDeployment();
+  console.log(`Mock usdt deployed to ${mockUsdt.target}`);
+
   let tx;
   const pUSDT = "0xBBF92F72a4627CEc4517aAcD817144014a8f64D8"
   
@@ -24,7 +29,7 @@ async function main() {
       constructorArguments: [pUSDT, publicPoolV1],
     });
   } catch (error) {
-    console.log('publicPoolContract: ', error);
+    console.log('publicPool2: ', error);
   }
 }
 
@@ -35,5 +40,8 @@ main().catch((error) => {
   process.exitCode = 1;
 });
 
-// Public pool deployed to 0xc444aFA8C8007B7594C54B40AEA51Ada5589725C
-// Bitget pool deployed to 0x286AD6DA882A4600a0Ed92d20ce1541a8Dc5c34b
+
+// npx hardhat verify --network nebulas 0x965aD51893144E91086c0c3EcbEB7066dA451320 0xBBF92F72a4627CEc4517aAcD817144014a8f64D8 0x9aEfB3a61787d30f33B4049382647e1D85Eb50EB
+
+// Mock usdt deployed to 0xBBF92F72a4627CEc4517aAcD817144014a8f64D8
+// Public pool 2 deployed to 0x965aD51893144E91086c0c3EcbEB7066dA451320
