@@ -8,42 +8,28 @@ async function main() {
   console.log(`Mock usdt deployed to ${mockUsdt.target}`);
 
   let tx;
-  const pUSDT = mockUsdt.target
+  const pUSDT = "0xBBF92F72a4627CEc4517aAcD817144014a8f64D8"
+  
   const admin_address = "0x556180984Ec8B4d28476376f99A071042f262a5c"
-  const pool1_address = "0x9aEfB3a61787d30f33B4049382647e1D85Eb50EB"
 
-  const publicPool2 = await ethers.deployContract("IncentivePoolV2", [pUSDT, pool1_address]);
-  await publicPool2.waitForDeployment();
-  console.log(`Public pool 2 deployed to ${publicPool2.target}`);
-  const publicPoolContract = publicPool2.target
+  const publicPoolV1 = "0x9aEfB3a61787d30f33B4049382647e1D85Eb50EB"
+  
+  const publicPoolv2 = await ethers.deployContract("IncentivePoolV2", [pUSDT, publicPoolV1]);
+  await publicPoolv2.waitForDeployment();
+  console.log(`Public pool deployed to ${publicPoolv2.target}`);
+  const publicPoolv2PoolContract = publicPoolv2.target
 
-  const SIGNER_ROLE = await  publicPool2.POOL_SIGNER()
-
-  tx = await publicPool2.grantRole(SIGNER_ROLE, admin_address)
-
-  const pusdtAt = await ethers.getContractAt("MockERC20", pUSDT);
-  tx = await pusdtAt.approve(publicPoolContract, "1000000000000")
-
-  const POOL_SIGNER = await publicPool2.POOL_SIGNER()
-  tx = await publicPool2.grantRole(POOL_SIGNER, admin_address)
+  const POOL_SIGNER = await publicPoolv2.POOL_SIGNER()
+  tx = await publicPoolv2.grantRole(POOL_SIGNER, admin_address)
 
  
   try {
     await hre.run("verify:verify", {
-      address: publicPoolContract,
-      constructorArguments: [pUSDT, pool1_address],
+      address: publicPoolv2PoolContract,
+      constructorArguments: [pUSDT, publicPoolV1],
     });
   } catch (error) {
     console.log('publicPool2: ', error);
-  }
-
-  try {
-    await hre.run("verify:verify", {
-      address: pUSDT,
-      constructorArguments: [],
-    });
-  } catch (error) {
-    console.log('pUSDT: ', error);
   }
 }
 
