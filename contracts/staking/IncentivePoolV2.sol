@@ -130,8 +130,7 @@ contract IncentivePoolV2 is
             uint256 totalStaked,
             uint256 latestHarvest,
             uint256 totalClaimed,
-            uint256 debt,
-            uint256 legacyStaked
+            uint256 debt
         )
     {
         return _getUserInfo(_user);
@@ -209,7 +208,8 @@ contract IncentivePoolV2 is
 
     function _legacyPoolUnstake() internal {
         address _user = msg.sender;
-        (uint256 _totalStaked, , , ) = IncentivePoolInterface(incentivePoolV1).getUserInfo(_user);
+        (uint256 _totalStaked, , , ) = IncentivePoolInterface(incentivePoolV1)
+            .getUserInfo(_user);
         if (_totalStaked > 0) {
             totalPoolStaked -= _totalStaked;
             TransferHelper.safeTransfer(pUSDT, _user, _totalStaked);
@@ -218,13 +218,12 @@ contract IncentivePoolV2 is
         __unstakedUsers.add(_user);
     }
 
-
-
     function _stake(uint256 _amount) internal {
         _updateDebt();
         address _user = msg.sender;
         users_[_user].totalStaked += _amount;
-        (uint256 _totalStaked, , , ) = IncentivePoolInterface(incentivePoolV1).getUserInfo(_user);
+        (uint256 _totalStaked, , , ) = IncentivePoolInterface(incentivePoolV1)
+            .getUserInfo(_user);
         require(
             users_[_user].totalStaked + _totalStaked <= MAX_STAKE_AMOUNT,
             "staked amount over"
@@ -288,17 +287,14 @@ contract IncentivePoolV2 is
             uint256 totalStaked,
             uint256 latestHarvest,
             uint256 totalClaimed,
-            uint256 debt,
-            uint256 legacyStaked
+            uint256 debt
         )
     {
         UserInfo memory _userInfo = users_[_user];
-        (uint256 _totalLegacyStaked, , , ) = IncentivePoolInterface(incentivePoolV1).getUserInfo(_user);
         totalStaked = _userInfo.totalStaked;
         latestHarvest = _userInfo.latestHarvest;
         totalClaimed = _userInfo.totalClaimed;
         debt = _userInfo.debt;
-        legacyStaked = _totalLegacyStaked;
     }
 
     function _pendingRewards(address _user) internal view returns (uint256) {
@@ -308,7 +304,7 @@ contract IncentivePoolV2 is
     function _pendingRewardsNoDebt(
         address _user
     ) internal view returns (uint256) {
-        (uint256 totalStaked, uint256 latestHarvest, , ,) = _getUserInfo(_user);
+        (uint256 totalStaked, uint256 latestHarvest, , ) = _getUserInfo(_user);
         if (block.timestamp < startTime) return 0;
         if (latestHarvest < startTime) {
             latestHarvest = startTime;
